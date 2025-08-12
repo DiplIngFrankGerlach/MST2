@@ -1,0 +1,184 @@
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Beschreibung des MST2 Protokolls</title>
+</head>
+
+<body>
+<h1>Beschreibung des MST2 Protokolls</h1>
+
+Autor: Dipl. Ing. Frank Gerlach (frankgerlach.tai@gmx.de)
+
+<h1>Minimal Secure Transport, Version 2</h1>
+
+<p>
+Das MST2-Protokoll dient zur sicheren Administration von
+Fernwirksystemen in Satelliten, Firewalls, Servern im Rechenzentrum,
+Prozessrechnern usw.
+</p>
+
+<h2>0. Grundlegende Chiffre</h2>
+<p>
+Gegeben sei die Blockchiffre AES(andere sind ebenso denkbar)
+</p>
+
+<pre>
+SchlüsselText = AES(Symmetrischer_Schlüssel, Klartext)
+</pre>
+
+<h2>1. Davies-Meyer Prüfsumme</h2>
+
+<pre>
+DAVIES_MEYER[i] = AES(Klartext[i],DAVIES_MEYER[i-1])
+
+DAVIES_MEYER[-1] = 0
+
+GesicherterKlartext = Klartext DAVIES_MEYER(Klartext)
+</pre>
+
+
+<h2>2. MST2 Protokoll</h2>
+
+<pre>
+   Sitzungs_Schlüssel_verschlüsselt = AES(Symmetrischer_Schlüssel,zufall_32_oktet)
+</pre>
+
+<p>
+Der Sitzungsschlüssel wird von der Gegenseite erzeugt und mittels ECB
+verschlüsselt übertragen.
+</p>
+
+<p>
+zufall_32_oktet kommt z.B. aus /dev/random oder aus einem abgespeicherten Zähler:
+</p>
+
+<pre>
+         zufall_32_oktet = AES(GeräteSchlüssel,persistenterZaehler++)
+
+	 GeräteSchlüssel kommt aus physikalischem Zufall und wird z.B. mit JTAG
+	 oder RS232 in den Flash-Speicher geladen. Der persistente Zähler muss unmittelbar
+	 inkrementiert und wieder gespeichert werden. Die physikalisch bedingte maximale Zahl
+	 von Flashvorgängen je Flash-Page ist dabei zu beachten.
+</pre>
+
+Der Sitzungs_Schlüssel wird von der jeweiligen Gegenseite erzeugt.
+
+<h2>3. Aus AES eine Schlüsselstrom-Chiffre konstruieren</h2>
+<pre>
+AES_ZAEHLER[i] = AES(Sitzungs_Schlüssel,i)
+
+SCHLUESSELTEXT[i] = GesicherterKlartext[i] XOR AES_ZAEHLER[i]
+</pre>
+
+<h2>4. Befehlstelegramm</h2>
+
+
+<pre>
+BEFEHLS_TELEGRAMM = Sitzungs_Schlüssel_verschlüsselt SCHLUESSELTEXT
+</pre>
+
+<h2>5. Beispielsitzung</h2>
+<p>
+Gegeben sei ein preshared key Symmetrischer_Schlüssel.
+</p>
+
+<p>
+Gegeben seien die Fernmeldepartner A und B, welche eine gesicherte
+Fernwirkverbindung aufbauen.
+</p>
+
+
+<h3>5.1 Austausch Sitzungsschlüssel</h2>
+<pre>
+A->B: 'ANFANG_MST2' Sitzungs_Schlüssel_B_verschlüsselt
+
+B entschlüsselt
+Sitzungs_Schlüssel_B = AES_ENTSCHLÜSSLE(Symmetrischer_Schlüssel,zufall_32_oktet)
+
+B->A: 'ANFANG_MST2' Sitzungs_Schlüssel_A_verschlüsselt
+
+A entschlüsselt
+Sitzungs_Schlüssel_A = AES_ENTSCHLÜSSLE(Symmetrischer_Schlüssel,Sitzungs_Schlüssel_A_verschlüsselt)
+
+B entschlüsselt
+Sitzungs_Schlüssel_B = AES_ENTSCHLÜSSLE(Symmetrischer_Schlüssel,Sitzungs_Schlüssel_B_verschlüsselt)
+</pre>
+
+<h3>5.2 A schickt Befehl an B</h2>
+<pre>
+A berechnet GesicherterKlartext = Klartext DAVIES_MEYER(Klartext)
+
+A berechnet AES_ZAEHLER[i] = AES(Sitzungs_Schlüssel_A,i)
+
+A berechnet SCHLUESSELTEXT[i] = GesicherterKlartext[i] XOR AES_ZAEHLER[i]
+
+A sendet SCHLUESSELTEXT an B
+</pre>
+
+
+<h3>5.2 B empfängt, dechiffriert und prüft Befehl</h2>
+<pre>
+
+B berechnet AES_ZAEHLER[i] = AES(Sitzungs_Schlüssel_A_verschlüsselt,i)
+
+B berechnet GesicherterKlartext_zu_prüfen[i] = SCHLUESSELTEXT[i] XOR AES_ZAEHLER[i]
+
+GesicherterKlartext_zu_prüfen = Klartext_zu_pruefen Pruefsumme
+
+B berechnet PF = DAVIES_MEYER(Klartext_zu_pruefen)  
+
+B vergleicht PF == Pruefsumme. 
+</pre>
+
+
+<h3>5.3 B führt Befehl aus</h2>
+
+Da die gesendete Prüfsumme und die von B berechnete Prüfsumme identisch waren,
+wird der Klartext an den Befehls-Interpreter übergeben.
+
+<pre>
+GesicherterKlartext = GesicherterKlartext_zu_prüfen
+Antwort = führeAus(GesicherterKlartext)
+</pre>
+
+
+<h3>5.4 B sendet Antwort an A</h2>
+
+<pre>
+B berechnet GesicherterKlartextAntwort = Antwort DAVIES_MEYER(Antwort)
+
+B berechnet AES_ZAEHLER_B[i_B] = AES(Sitzungs_Schlüssel_B_verschlüsselt,i_B)
+
+B berechnet SCHLUESSELTEXT_B[i] = GesicherterKlartextAntwort[i] XOR AES_ZAEHLER_B[i]
+
+B->A: SCHLUESSELTEXT_B
+</pre>
+
+
+<h3>5.5 A empfängt und prüft Antwort</h2>
+
+<pre>
+A berechnet AES_ZAEHLER_B[i_B] = AES(Sitzungs_Schlüssel_B_verschlüsselt,i)
+
+A berechnet GesicherteAntwort_zu_prüfen[i] = SCHLUESSELTEXT_B[i_B] XOR AES_ZAEHLER_B[i]
+
+GesicherteAntwort_zu_prüfen = Klartext_zu_pruefen Pruefsumme
+
+A berechnet PF = DAVIES_MEYER(Klartext_zu_pruefen)  
+
+A vergleicht PF == Pruefsumme. 
+</pre>
+
+<h3>5.6 A gibt Antwort an den Bediener aus</h2>
+
+A hat die empfangene Prüfsumme und die berechnete Prüfsumme erfolgreich verglichen
+und gibt den Klartext and den Bediener aus.
+<pre>
+Klartext = Klartext_zu_pruefen
+cout << Klartext << endl;
+</pre>
+
+</body>
+
+</html>
