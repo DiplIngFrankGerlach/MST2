@@ -8,7 +8,12 @@
 <body>
 <h1>Beschreibung des MST2 Protokolls</h1>
 
+<p>
 Autor: Dipl. Ing. Frank Gerlach (frankgerlach.tai@gmx.de)
+</p>
+<p>
+Version: 1.4
+</p>
 
 <h1>Minimal Secure Transport, Version 2</h1>
 
@@ -91,10 +96,14 @@ Fernwirkverbindung aufbauen.
 
 <h3>5.1 Austausch Sitzungsschlüssel</h2>
 <pre>
+A berechnet Sitzungs_Schlüssel_B_verschlüsselt = AES(Symmetrischer_Schlüssel,zufall_32_oktet)
+
 A->B: 'ANFANG_MST2' Sitzungs_Schlüssel_B_verschlüsselt
 
 B entschlüsselt
-Sitzungs_Schlüssel_B = AES_ENTSCHLÜSSLE(Symmetrischer_Schlüssel,zufall_32_oktet)
+Sitzungs_Schlüssel_B = AES_ENTSCHLÜSSLE(Symmetrischer_Schlüssel,Sitzungs_Schlüssel_B_verschlüsselt)
+
+B berechnet Sitzungs_Schlüssel_A_verschlüsselt = AES(Symmetrischer_Schlüssel,zufall_32_oktet)
 
 B->A: 'ANFANG_MST2' Sitzungs_Schlüssel_A_verschlüsselt
 
@@ -120,7 +129,7 @@ A sendet SCHLUESSELTEXT an B
 <h3>5.2 B empfängt, dechiffriert und prüft Befehl</h2>
 <pre>
 
-B berechnet AES_ZAEHLER[i] = AES(Sitzungs_Schlüssel_A_verschlüsselt,i)
+B berechnet AES_ZAEHLER[i] = AES(Sitzungs_Schlüssel_A,i)
 
 B berechnet GesicherterKlartext_zu_prüfen[i] = SCHLUESSELTEXT[i] XOR AES_ZAEHLER[i]
 
@@ -129,6 +138,8 @@ GesicherterKlartext_zu_prüfen = Klartext_zu_pruefen Pruefsumme
 B berechnet PF = DAVIES_MEYER(Klartext_zu_pruefen)  
 
 B vergleicht PF == Pruefsumme. 
+
+i wird auf Anfangszustand rueckgesetzt, falls Vergleich falsch
 </pre>
 
 
@@ -148,9 +159,9 @@ Antwort = führeAus(GesicherterKlartext)
 <pre>
 B berechnet GesicherterKlartextAntwort = Antwort DAVIES_MEYER(Antwort)
 
-B berechnet AES_ZAEHLER_B[i_B] = AES(Sitzungs_Schlüssel_B_verschlüsselt,i_B)
+B berechnet AES_ZAEHLER_B[i_B] = AES(Sitzungs_Schlüssel_B,i_B)
 
-B berechnet SCHLUESSELTEXT_B[i] = GesicherterKlartextAntwort[i] XOR AES_ZAEHLER_B[i]
+B berechnet SCHLUESSELTEXT_B[i_B] = GesicherterKlartextAntwort[i_B] XOR AES_ZAEHLER_B[i_B]
 
 B->A: SCHLUESSELTEXT_B
 </pre>
@@ -159,15 +170,17 @@ B->A: SCHLUESSELTEXT_B
 <h3>5.5 A empfängt und prüft Antwort</h2>
 
 <pre>
-A berechnet AES_ZAEHLER_B[i_B] = AES(Sitzungs_Schlüssel_B_verschlüsselt,i)
+A berechnet AES_ZAEHLER_B[i_B] = AES(Sitzungs_Schlüssel_B,i_B)
 
-A berechnet GesicherteAntwort_zu_prüfen[i] = SCHLUESSELTEXT_B[i_B] XOR AES_ZAEHLER_B[i]
+A berechnet GesicherteAntwort_zu_prüfen[i_B] = SCHLUESSELTEXT_B[i_B] XOR AES_ZAEHLER_B[i_B]
 
 GesicherteAntwort_zu_prüfen = Klartext_zu_pruefen Pruefsumme
 
 A berechnet PF = DAVIES_MEYER(Klartext_zu_pruefen)  
 
 A vergleicht PF == Pruefsumme. 
+
+i_B wird auf Anfangszustand rueckgesetzt, falls Vergleich falsch
 </pre>
 
 <h3>5.6 A gibt Antwort an den Bediener aus</h2>
